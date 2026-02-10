@@ -34,6 +34,7 @@
             position: relative;
             display: flex;
             flex-direction: column;
+            z-index: 2;
         }
 
         #terminal-header {
@@ -44,9 +45,7 @@
             justify-content: space-between;
         }
 
-        .status-bar {
-            font-size: 0.9em;
-        }
+        .status-bar { font-size: 0.9em; font-weight: bold; }
 
         #alert-system {
             color: var(--hacker-red);
@@ -54,18 +53,16 @@
             animation: blink 1s infinite;
         }
 
-        @keyframes blink {
-            50% { opacity: 0; }
-        }
+        @keyframes blink { 50% { opacity: 0; } }
 
-        #content-area {
-            flex-grow: 1;
-        }
+        #content-area { flex-grow: 1; }
 
         .question-text {
             font-size: 1.2em;
             margin-bottom: 20px;
             line-height: 1.4;
+            min-height: 60px;
+            color: #fff;
         }
 
         .options-grid {
@@ -108,8 +105,8 @@
             position: fixed;
             top: 0;
             left: 0;
-            z-index: -1;
-            opacity: 0.1;
+            z-index: 1;
+            opacity: 0.15;
         }
         
         .screen-overlay {
@@ -118,9 +115,10 @@
             left: 0;
             width: 100%;
             height: 100%;
-            background: rgba(255, 0, 0, 0.1);
+            background: rgba(255, 0, 0, 0.3);
             pointer-events: none;
             display: none;
+            z-index: 3;
         }
     </style>
 </head>
@@ -131,20 +129,20 @@
 
 <div id="game-container">
     <div id="terminal-header">
-        <div class="status-bar">STATUS: <span id="defense-status">SYSTEM SECURE</span></div>
-        <div id="alert-system">THREAT LEVEL: LOW</div>
+        <div class="status-bar">STATUS: <span id="defense-status">SẴN SÀNG</span></div>
+        <div id="alert-system">SECURITY: ACTIVE</div>
         <div class="status-bar">SHIELD: <span id="shield-percent">100%</span></div>
     </div>
 
     <div id="content-area">
         <div id="intro">
-            <h2>CẢNH BÁO: PHÁT HIỆN XÂM NHẬP!</h2>
-            <p>Một nhóm tin tặc đang cố gắng mã hóa dữ liệu của bạn bằng Ransomware.</p>
-            <p>Bạn cần vượt qua tường lửa bằng cách trả lời đúng 20 câu hỏi bảo mật để ngăn chặn cuộc tấn công.</p>
-            <button onclick="startGame()" style="text-align:center; display:block; margin: 20px auto; width: 200px;">BẮT ĐẦU PHÒNG THỦ</button>
+            <h2 style="color: var(--hacker-red)">CẢNH BÁO: PHÁT HIỆN RANSOMWARE!</h2>
+            <p>Hệ thống đang bị tấn công. Các đáp án đã được xáo trộn để gây nhiễu.</p>
+            <p>Hãy trả lời đúng 20 câu hỏi để đẩy lùi mã độc khỏi máy tính.</p>
+            <button onclick="startGame()" style="text-align:center; display:block; margin: 20px auto; width: 250px;">BẮT ĐẦU PHÒNG THỦ</button>
         </div>
         <div id="quiz" style="display:none;">
-            <div class="question-text" id="q-text">Đang tải...</div>
+            <div class="question-text" id="q-text">Đang kết nối...</div>
             <div class="options-grid" id="q-options"></div>
         </div>
         <div id="result" style="display:none; text-align: center;">
@@ -160,34 +158,80 @@
 </div>
 
 <script>
-    // Dữ liệu câu hỏi từ nguồn bạn cung cấp
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+    function playSound(type) {
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+
+        switch(type) {
+            case 'correct':
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(880, audioCtx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(440, audioCtx.currentTime + 0.1);
+                gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.1);
+                osc.start(); osc.stop(audioCtx.currentTime + 0.1);
+                break;
+            case 'wrong':
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(110, audioCtx.currentTime);
+                gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+                gain.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.3);
+                osc.start(); osc.stop(audioCtx.currentTime + 0.3);
+                break;
+            case 'win':
+                [440, 554, 659, 880].forEach((f, i) => {
+                    const o = audioCtx.createOscillator();
+                    const g = audioCtx.createGain();
+                    o.connect(g); g.connect(audioCtx.destination);
+                    o.frequency.value = f;
+                    g.gain.setValueAtTime(0.1, audioCtx.currentTime + i*0.15);
+                    g.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + i*0.15 + 0.4);
+                    o.start(audioCtx.currentTime + i*0.15); o.stop(audioCtx.currentTime + i*0.15 + 0.4);
+                });
+                break;
+            case 'lose':
+                osc.type = 'square';
+                osc.frequency.setValueAtTime(150, audioCtx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(40, audioCtx.currentTime + 1);
+                gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
+                gain.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 1);
+                osc.start(); osc.stop(audioCtx.currentTime + 1);
+                break;
+        }
+    }
+
     const questions = [
-        { q: "Thông tin cá nhân là gì?", a: ["Là thông tin dùng để xác định danh tính của một cá nhân.", "Là địa chỉ các trang web bạn thường xem.", "Là danh sách bạn bè trên Facebook.", "Là cấu hình phần cứng của máy tính."], correct: 0, cite: "1, 2" },
-        { q: "Ví dụ nào sau đây là thông tin cá nhân?", a: ["Hãng xe bus trong thành phố.", "Thời tiết hôm nay.", "Họ tên, ngày sinh, số điện thoại.", "Tên các loại virus máy tính."], correct: 2, cite: "3, 4" },
-        { q: "Ransomware là gì?", a: ["Phần mềm dọn rác máy tính.", "Phần mềm độc hại mã hóa dữ liệu để tống tiền.", "Một loại trò chơi trực tuyến.", "Ứng dụng nhắn tin bảo mật."], correct: 1, cite: "5, 6" },
-        { q: "Người dùng phải làm gì để lấy lại dữ liệu khi bị ransomware?", a: ["Cài lại Win.", "Mua máy tính mới.", "Trả tiền chuộc cho tin tặc.", "Tắt nguồn máy tính."], correct: 2, cite: "7, 8" },
-        { q: "Nguyên nhân khiến máy tính dễ nhiễm mã độc?", a: ["Tải phần mềm không rõ nguồn gốc.", "Sử dụng máy tính quá lâu.", "Màn hình bị bám bụi.", "Kết nối với máy in."], correct: 0, cite: "9, 10" },
-        { q: "Vì sao không nên mở file đính kèm email lạ?", a: ["Vì file đó quá nặng.", "Vì có thể chứa mã độc.", "Vì sẽ tốn tiền internet.", "Vì email sẽ tự động bị xóa."], correct: 1, cite: "11, 12" },
-        { q: "Giao thức web an toàn thường bắt đầu bằng gì?", a: ["http", "www", "https", "ftp"], correct: 2, cite: "13, 14" },
-        { q: "Vì sao cần kiểm tra địa chỉ web trên trình duyệt?", a: ["Để trang web load nhanh hơn.", "Để tránh website giả mạo.", "Để lưu trang web vào dấu trang.", "Để tăng độ sáng màn hình."], correct: 1, cite: "15, 16" },
-        { q: "Mật khẩu mạnh cần có đặc điểm gì?", a: ["Chỉ gồm chữ cái.", "Sử dụng số điện thoại của mình.", "Kết hợp chữ, số và ký tự đặc biệt.", "Sử dụng họ tên của mình."], correct: 2, cite: "17, 18" },
-        { q: "Xác thực hai yếu tố là gì?", a: ["Đăng nhập trên 2 máy tính.", "Dùng 2 mật khẩu khác nhau.", "Xác thực bằng mật khẩu và thêm yếu tố khác.", "Hỏi ý kiến 2 người trước khi dùng."], correct: 2, cite: "19, 20" },
-        { q: "Có nên dùng ngày sinh làm mật khẩu không?", a: ["Có, vì dễ nhớ.", "Không, vì dễ đoán.", "Có, vì nó mang lại may mắn.", "Không, vì nó quá ngắn."], correct: 1, cite: "21, 22" },
-        { q: "Tại sao không nên dùng wifi công cộng giao dịch tài chính?", a: ["Vì mạng yếu.", "Dễ bị đánh cắp thông tin.", "Tốn phí sử dụng.", "Làm hỏng pin điện thoại."], correct: 1, cite: "23, 24" },
-        { q: "Sau khi dùng tài khoản trên máy lạ, cần làm gì?", a: ["Đổi màu nền máy tính.", "Xóa ứng dụng.", "Đăng xuất tài khoản.", "Tắt màn hình."], correct: 2, cite: "25, 26" },
-        { q: "Trách nhiệm cá nhân khi dùng không gian mạng là gì?", a: ["Tìm cách phá mật khẩu người khác.", "Tuân thủ pháp luật về an ninh mạng.", "Chia sẻ tin đồn giật gân.", "Ẩn danh để chửi bới người khác."], correct: 1, cite: "27, 28" },
-        { q: "Khi phát hiện xâm phạm an ninh mạng, cần làm gì?", a: ["Im lặng bỏ qua.", "Báo cho cơ quan có thẩm quyền.", "Gửi tin nhắn đe dọa lại tin tặc.", "Xóa toàn bộ dữ liệu máy tính."], correct: 1, cite: "29, 30" },
-        { q: "Quy tắc ứng xử trên MXH nhằm mục đích gì?", a: ["Tăng lượt like.", "Đảm bảo văn minh, an toàn và trách nhiệm.", "Kiểm soát số lượng người dùng.", "Làm cho mạng xã hội đẹp hơn."], correct: 1, cite: "31, 32" },
-        { q: "Hành vi trên mạng xã hội cần phù hợp với gì?", a: ["Giá trị đạo đức, văn hóa.", "Sở thích cá nhân.", "Số đông mọi người.", "Trào lưu đang hot."], correct: 0, cite: "33, 34" },
-        { q: "Học sinh làm gì để góp phần bảo vệ an ninh mạng?", a: ["Học cách hack tài khoản.", "Sử dụng mạng an toàn, đúng quy định.", "Không dùng mạng internet nữa.", "Chia sẻ mật khẩu cho các bạn."], correct: 1, cite: "35, 36" },
-        { q: "Thông tin nào sau đây thuộc bí mật cá nhân?", a: ["Thời khóa biểu lớp.", "Tên trường học.", "Hồ sơ y tế.", "Danh sách giáo viên."], correct: 2, cite: "37, 38" },
-        { q: "Chia sẻ thông tin cá nhân trên mạng có an toàn không?", a: ["Có, mạng xã hội rất bảo mật.", "Không, vì có nguy cơ bị lạm dụng.", "Có, nếu bạn đặt chế độ riêng tư.", "Chỉ an toàn vào ban ngày."], correct: 1, cite: "39, 40" }
+        { q: "Thông tin cá nhân được hiểu là gì?", a: ["Thông tin dùng để xác định danh tính của một cá nhân.", "Lịch sử tìm kiếm trên web.", "Danh sách các ứng dụng đã tải.", "Cấu hình phần cứng máy tính."], correct: 0 },
+        { q: "Ví dụ nào sau đây là thông tin cá nhân tiêu biểu?", a: ["Thời tiết, địa điểm du lịch.", "Họ tên, ngày sinh, số điện thoại.", "Tên các loại virus mạng.", "Hãng sản xuất linh kiện máy tính."], correct: 1 },
+        { q: "Ransomware là loại phần mềm gì?", a: ["Phần mềm giúp tăng tốc máy tính.", "Phần mềm dọn dẹp hệ thống.", "Mã độc mã hóa dữ liệu để tống tiền.", "Ứng dụng nhắn tin bảo mật."], correct: 2 },
+        { q: "Khi bị ransomware, tin tặc thường ép người dùng phải làm gì?", a: ["Cài đặt lại hệ điều hành.", "Tắt nguồn máy tính.", "Mua thêm ổ cứng mới.", "Trả tiền chuộc để lấy lại dữ liệu."], correct: 3 },
+        { q: "Nguyên nhân nào sau đây khiến máy tính dễ nhiễm mã độc?", a: ["Vệ sinh máy tính không sạch.", "Sử dụng máy tính quá nhiều giờ.", "Tải phần mềm không rõ nguồn gốc.", "Để màn hình quá sáng."], correct: 2 },
+        { q: "Vì sao không nên mở các tệp đính kèm từ email lạ?", a: ["Vì có thể chứa mã độc gây hại.", "Vì tốn dung lượng ổ cứng.", "Vì email sẽ tự biến mất.", "Vì làm hỏng bàn phím."], correct: 0 },
+        { q: "Giao thức web an toàn thường bắt đầu bằng cụm từ nào?", a: ["http://", "www.", "https://", "ftp://"], correct: 2 },
+        { q: "Mục đích của việc kiểm tra kỹ địa chỉ web (URL) là gì?", a: ["Để trang web tải nhanh hơn.", "Để biết người lập trình web.", "Để lưu trang web dễ dàng hơn.", "Để tránh truy cập website giả mạo."], correct: 3 },
+        { q: "Mật khẩu mạnh cần hội tụ đặc điểm nào?", a: ["Chỉ gồm các chữ cái viết hoa.", "Kết hợp chữ, số và ký tự đặc biệt.", "Chỉ dùng số điện thoại cá nhân.", "Sử dụng tên thú cưng."], correct: 1 },
+        { q: "Xác thực hai yếu tố (2FA) là phương thức như thế nào?", a: ["Dùng mật khẩu kết hợp thêm một yếu tố khác (OTP, vân tay).", "Dùng 2 mật khẩu khác nhau.", "Đăng nhập trên 2 máy cùng lúc.", "Yêu cầu 2 người cùng đăng nhập."], correct: 0 },
+        { q: "Tại sao không nên dùng ngày sinh làm mật khẩu?", a: ["Vì nó quá dài.", "Vì nó mang lại xui xẻo.", "Vì hệ thống không cho phép.", "Vì dễ đoán và dễ bị thu thập."], correct: 3 },
+        { q: "Tại sao không nên dùng wifi công cộng để giao dịch tài chính?", a: ["Vì dễ bị kẻ xấu đánh cắp thông tin giao dịch.", "Vì tốc độ mạng chậm.", "Vì làm tốn pin điện thoại.", "Vì ngân hàng sẽ khóa tài khoản."], correct: 0 },
+        { q: "Sau khi dùng máy tính lạ, thao tác nào quan trọng nhất?", a: ["Xóa lịch sử tìm kiếm.", "Tắt màn hình máy tính.", "Đăng xuất (Log out) tài khoản.", "Xóa ứng dụng vừa dùng."], correct: 2 },
+        { q: "Một trong những trách nhiệm cá nhân trên không gian mạng?", a: ["Tuân thủ pháp luật về an ninh mạng.", "Phá khóa phần mềm lậu.", "Chia sẻ tin đồn giật gân.", "Sử dụng biệt danh để công kích."], correct: 0 },
+        { q: "Khi phát hiện hành vi xâm phạm an ninh mạng, bạn nên làm gì?", a: ["Im lặng bỏ qua.", "Tự mình tấn công trả đũa.", "Báo cho cơ quan chức năng có thẩm quyền.", "Chia sẻ lên hội nhóm kín."], correct: 2 },
+        { q: "Quy tắc ứng xử trên mạng xã hội nhằm mục đích gì?", a: ["Đảm bảo môi trường văn minh, an toàn.", "Tăng số lượt người theo dõi.", "Kiểm soát lợi nhuận công ty mạng.", "Hạn chế người dùng truy cập."], correct: 0 },
+        { q: "Hành vi ứng xử trên mạng xã hội cần phù hợp với điều gì?", a: ["Số lượng lượt Like nhận được.", "Sở thích cá nhân tại thời điểm đó.", "Các trào lưu đang nổi tiếng.", "Giá trị đạo đức và văn hóa truyền thống."], correct: 3 },
+        { q: "Học sinh đóng góp bảo vệ an ninh mạng bằng cách nào?", a: ["Học cách bẻ khóa tài khoản.", "Sử dụng mạng an toàn, đúng quy định.", "Không dùng Internet nữa.", "Chia sẻ mật khẩu cho bạn bè."], correct: 1 },
+        { q: "Thông tin nào được coi là bí mật cá nhân cần bảo vệ?", a: ["Hồ sơ y tế, tình trạng sức khỏe.", "Tên các trò chơi đã tải.", "Thời khóa biểu của lớp.", "Địa chỉ quán ăn yêu thích."], correct: 0 },
+        { q: "Việc chia sẻ thông tin cá nhân lên mạng có an toàn không?", a: ["Rất an toàn vì có bảo mật.", "An toàn nếu chỉ gửi cho bạn bè.", "Không, vì có nguy cơ bị lạm dụng.", "Chỉ an toàn nếu dùng điện thoại xịn."], correct: 2 }
     ];
 
     let currentQuestion = 0;
     let shield = 100;
 
     function startGame() {
+        audioCtx.resume();
         document.getElementById('intro').style.display = 'none';
         document.getElementById('quiz').style.display = 'block';
         showQuestion();
@@ -195,7 +239,7 @@
 
     function showQuestion() {
         const q = questions[currentQuestion];
-        document.getElementById('q-text').innerText = `[LOG #${currentQuestion + 1}] QUESTION: ${q.q}`;
+        document.getElementById('q-text').innerText = `[LOG #${currentQuestion + 1}]: ${q.q}`;
         const optionsDiv = document.getElementById('q-options');
         optionsDiv.innerHTML = '';
         
@@ -206,23 +250,25 @@
             optionsDiv.appendChild(btn);
         });
 
-        // Update UI
         document.getElementById('progress-fill').style.width = `${(currentQuestion / questions.length) * 100}%`;
     }
 
     function checkAnswer(choice) {
         if (choice === questions[currentQuestion].correct) {
+            playSound('correct');
             currentQuestion++;
-            updateStatus("PHÒNG THỦ THÀNH CÔNG", "LOW", false);
+            updateStatus("PHÒNG THỦ THÀNH CÔNG", "THẤP", false);
         } else {
+            playSound('wrong');
             shield -= 20;
-            updateStatus("CẢNH BÁO: HỆ THỐNG BỊ XÂM NHẬP", "CRITICAL", true);
-            alert(`Sai rồi! Gợi ý: Hãy xem lại nguồn tài liệu.cite}]`);
+            updateStatus("CẢNH BÁO: HỆ THỐNG BỊ XÂM NHẬP", "NGUY HIỂM", true);
         }
 
         if (shield <= 0) {
+            playSound('lose');
             endGame(false);
         } else if (currentQuestion >= questions.length) {
+            playSound('win');
             endGame(true);
         } else {
             showQuestion();
@@ -231,10 +277,15 @@
 
     function updateStatus(msg, level, danger) {
         document.getElementById('defense-status').innerText = msg;
-        document.getElementById('alert-system').innerText = `THREAT LEVEL: ${level}`;
+        document.getElementById('alert-system').innerText = `THREAT: ${level}`;
         document.getElementById('shield-percent').innerText = `${shield}%`;
         document.getElementById('danger-overlay').style.display = danger ? 'block' : 'none';
-        if(danger) setTimeout(() => { document.getElementById('danger-overlay').style.display = 'none'; }, 500);
+        if(danger) {
+            document.getElementById('defense-status').style.color = 'var(--hacker-red)';
+            setTimeout(() => { document.getElementById('danger-overlay').style.display = 'none'; }, 200);
+        } else {
+            document.getElementById('defense-status').style.color = 'var(--neon-green)';
+        }
     }
 
     function endGame(win) {
@@ -244,21 +295,20 @@
         
         if (win) {
             document.getElementById('result-title').innerText = "HỆ THỐNG AN TOÀN!";
-            document.getElementById('result-desc').innerText = "Chúc mừng! Bạn đã trả lời đúng tất cả câu hỏi và đẩy lùi cuộc tấn công của tin tặc.";
+            document.getElementById('result-desc').innerText = "Tin tặc đã bị đẩy lùi. Bạn đã hoàn thành xuất sắc nhiệm vụ phòng thủ.";
             document.getElementById('result-title').style.color = "var(--neon-green)";
         } else {
-            document.getElementById('result-title').innerText = "HỆ THỐNG BỊ PHÁ HỦY!";
-            document.getElementById('result-desc').innerText = "Lớp bảo vệ đã sụp đổ. Dữ liệu của bạn đã bị mã hóa bởi Ransomware. Hãy học lại các kiến thức an ninh mạng!";
+            document.getElementById('result-title').innerText = "HỆ THỐNG THẤT THỦ!";
+            document.getElementById('result-desc').innerText = "Dữ liệu đã bị mã hóa hoàn toàn. Hãy nâng cao kiến thức và thử lại sau.";
             document.getElementById('result-title').style.color = "var(--hacker-red)";
         }
     }
 
-    // Hiệu ứng Matrix nền
     const canvas = document.getElementById('matrix-bg');
     const ctx = canvas.getContext('2d');
     canvas.width = window.innerWidth;
     canvas.height = window.innerHeight;
-    const chars = "0101010101ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+    const chars = "01";
     const fontSize = 15;
     const columns = canvas.width / fontSize;
     const drops = Array(Math.floor(columns)).fill(1);
