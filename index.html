@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cyber Defense: Operation Security</title>
+    <style>
+        :root {
+            --neon-green: #00ff41;
+            --dark-bg: #0d0d0d;
+            --hacker-red: #ff3e3e;
+            --terminal-gray: #1a1a1a;
+        }
+
+        body {
+            background-color: var(--dark-bg);
+            color: var(--neon-green);
+            font-family: 'Courier New', Courier, monospace;
+            margin: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        #game-container {
+            width: 800px;
+            height: 550px;
+            background: var(--terminal-gray);
+            border: 2px solid var(--neon-green);
+            box-shadow: 0 0 20px rgba(0, 255, 65, 0.2);
+            padding: 20px;
+            position: relative;
+            display: flex;
+            flex-direction: column;
+        }
+
+        #terminal-header {
+            border-bottom: 1px solid var(--neon-green);
+            padding-bottom: 10px;
+            margin-bottom: 20px;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .status-bar {
+            font-size: 0.9em;
+        }
+
+        #alert-system {
+            color: var(--hacker-red);
+            font-weight: bold;
+            animation: blink 1s infinite;
+        }
+
+        @keyframes blink {
+            50% { opacity: 0; }
+        }
+
+        #content-area {
+            flex-grow: 1;
+        }
+
+        .question-text {
+            font-size: 1.2em;
+            margin-bottom: 20px;
+            line-height: 1.4;
+        }
+
+        .options-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+        }
+
+        button {
+            background: transparent;
+            border: 1px solid var(--neon-green);
+            color: var(--neon-green);
+            padding: 12px;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-align: left;
+            font-family: inherit;
+        }
+
+        button:hover {
+            background: var(--neon-green);
+            color: black;
+        }
+
+        #progress-bar-container {
+            width: 100%;
+            height: 10px;
+            background: #333;
+            margin-top: 20px;
+        }
+
+        #progress-fill {
+            height: 100%;
+            background: var(--neon-green);
+            width: 0%;
+            transition: width 0.5s;
+        }
+
+        #matrix-bg {
+            position: fixed;
+            top: 0;
+            left: 0;
+            z-index: -1;
+            opacity: 0.1;
+        }
+        
+        .screen-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(255, 0, 0, 0.1);
+            pointer-events: none;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+
+<canvas id="matrix-bg"></canvas>
+<div class="screen-overlay" id="danger-overlay"></div>
+
+<div id="game-container">
+    <div id="terminal-header">
+        <div class="status-bar">STATUS: <span id="defense-status">SYSTEM SECURE</span></div>
+        <div id="alert-system">THREAT LEVEL: LOW</div>
+        <div class="status-bar">SHIELD: <span id="shield-percent">100%</span></div>
+    </div>
+
+    <div id="content-area">
+        <div id="intro">
+            <h2>CẢNH BÁO: PHÁT HIỆN XÂM NHẬP!</h2>
+            <p>Một nhóm tin tặc đang cố gắng mã hóa dữ liệu của bạn bằng Ransomware.</p>
+            <p>Bạn cần vượt qua tường lửa bằng cách trả lời đúng 20 câu hỏi bảo mật để ngăn chặn cuộc tấn công.</p>
+            <button onclick="startGame()" style="text-align:center; display:block; margin: 20px auto; width: 200px;">BẮT ĐẦU PHÒNG THỦ</button>
+        </div>
+        <div id="quiz" style="display:none;">
+            <div class="question-text" id="q-text">Đang tải...</div>
+            <div class="options-grid" id="q-options"></div>
+        </div>
+        <div id="result" style="display:none; text-align: center;">
+            <h2 id="result-title"></h2>
+            <p id="result-desc"></p>
+            <button onclick="location.reload()" style="text-align:center; display:block; margin: 20px auto; width: 200px;">KHỞI ĐỘNG LẠI</button>
+        </div>
+    </div>
+
+    <div id="progress-bar-container">
+        <div id="progress-fill"></div>
+    </div>
+</div>
+
+<script>
+    // Dữ liệu câu hỏi từ nguồn bạn cung cấp
+    const questions = [
+        { q: "Thông tin cá nhân là gì?", a: ["Là thông tin dùng để xác định danh tính của một cá nhân.", "Là địa chỉ các trang web bạn thường xem.", "Là danh sách bạn bè trên Facebook.", "Là cấu hình phần cứng của máy tính."], correct: 0, cite: "1, 2" },
+        { q: "Ví dụ nào sau đây là thông tin cá nhân?", a: ["Hãng xe bus trong thành phố.", "Thời tiết hôm nay.", "Họ tên, ngày sinh, số điện thoại.", "Tên các loại virus máy tính."], correct: 2, cite: "3, 4" },
+        { q: "Ransomware là gì?", a: ["Phần mềm dọn rác máy tính.", "Phần mềm độc hại mã hóa dữ liệu để tống tiền.", "Một loại trò chơi trực tuyến.", "Ứng dụng nhắn tin bảo mật."], correct: 1, cite: "5, 6" },
+        { q: "Người dùng phải làm gì để lấy lại dữ liệu khi bị ransomware?", a: ["Cài lại Win.", "Mua máy tính mới.", "Trả tiền chuộc cho tin tặc.", "Tắt nguồn máy tính."], correct: 2, cite: "7, 8" },
+        { q: "Nguyên nhân khiến máy tính dễ nhiễm mã độc?", a: ["Tải phần mềm không rõ nguồn gốc.", "Sử dụng máy tính quá lâu.", "Màn hình bị bám bụi.", "Kết nối với máy in."], correct: 0, cite: "9, 10" },
+        { q: "Vì sao không nên mở file đính kèm email lạ?", a: ["Vì file đó quá nặng.", "Vì có thể chứa mã độc.", "Vì sẽ tốn tiền internet.", "Vì email sẽ tự động bị xóa."], correct: 1, cite: "11, 12" },
+        { q: "Giao thức web an toàn thường bắt đầu bằng gì?", a: ["http", "www", "https", "ftp"], correct: 2, cite: "13, 14" },
+        { q: "Vì sao cần kiểm tra địa chỉ web trên trình duyệt?", a: ["Để trang web load nhanh hơn.", "Để tránh website giả mạo.", "Để lưu trang web vào dấu trang.", "Để tăng độ sáng màn hình."], correct: 1, cite: "15, 16" },
+        { q: "Mật khẩu mạnh cần có đặc điểm gì?", a: ["Chỉ gồm chữ cái.", "Sử dụng số điện thoại của mình.", "Kết hợp chữ, số và ký tự đặc biệt.", "Sử dụng họ tên của mình."], correct: 2, cite: "17, 18" },
+        { q: "Xác thực hai yếu tố là gì?", a: ["Đăng nhập trên 2 máy tính.", "Dùng 2 mật khẩu khác nhau.", "Xác thực bằng mật khẩu và thêm yếu tố khác.", "Hỏi ý kiến 2 người trước khi dùng."], correct: 2, cite: "19, 20" },
+        { q: "Có nên dùng ngày sinh làm mật khẩu không?", a: ["Có, vì dễ nhớ.", "Không, vì dễ đoán.", "Có, vì nó mang lại may mắn.", "Không, vì nó quá ngắn."], correct: 1, cite: "21, 22" },
+        { q: "Tại sao không nên dùng wifi công cộng giao dịch tài chính?", a: ["Vì mạng yếu.", "Dễ bị đánh cắp thông tin.", "Tốn phí sử dụng.", "Làm hỏng pin điện thoại."], correct: 1, cite: "23, 24" },
+        { q: "Sau khi dùng tài khoản trên máy lạ, cần làm gì?", a: ["Đổi màu nền máy tính.", "Xóa ứng dụng.", "Đăng xuất tài khoản.", "Tắt màn hình."], correct: 2, cite: "25, 26" },
+        { q: "Trách nhiệm cá nhân khi dùng không gian mạng là gì?", a: ["Tìm cách phá mật khẩu người khác.", "Tuân thủ pháp luật về an ninh mạng.", "Chia sẻ tin đồn giật gân.", "Ẩn danh để chửi bới người khác."], correct: 1, cite: "27, 28" },
+        { q: "Khi phát hiện xâm phạm an ninh mạng, cần làm gì?", a: ["Im lặng bỏ qua.", "Báo cho cơ quan có thẩm quyền.", "Gửi tin nhắn đe dọa lại tin tặc.", "Xóa toàn bộ dữ liệu máy tính."], correct: 1, cite: "29, 30" },
+        { q: "Quy tắc ứng xử trên MXH nhằm mục đích gì?", a: ["Tăng lượt like.", "Đảm bảo văn minh, an toàn và trách nhiệm.", "Kiểm soát số lượng người dùng.", "Làm cho mạng xã hội đẹp hơn."], correct: 1, cite: "31, 32" },
+        { q: "Hành vi trên mạng xã hội cần phù hợp với gì?", a: ["Giá trị đạo đức, văn hóa.", "Sở thích cá nhân.", "Số đông mọi người.", "Trào lưu đang hot."], correct: 0, cite: "33, 34" },
+        { q: "Học sinh làm gì để góp phần bảo vệ an ninh mạng?", a: ["Học cách hack tài khoản.", "Sử dụng mạng an toàn, đúng quy định.", "Không dùng mạng internet nữa.", "Chia sẻ mật khẩu cho các bạn."], correct: 1, cite: "35, 36" },
+        { q: "Thông tin nào sau đây thuộc bí mật cá nhân?", a: ["Thời khóa biểu lớp.", "Tên trường học.", "Hồ sơ y tế.", "Danh sách giáo viên."], correct: 2, cite: "37, 38" },
+        { q: "Chia sẻ thông tin cá nhân trên mạng có an toàn không?", a: ["Có, mạng xã hội rất bảo mật.", "Không, vì có nguy cơ bị lạm dụng.", "Có, nếu bạn đặt chế độ riêng tư.", "Chỉ an toàn vào ban ngày."], correct: 1, cite: "39, 40" }
+    ];
+
+    let currentQuestion = 0;
+    let shield = 100;
+
+    function startGame() {
+        document.getElementById('intro').style.display = 'none';
+        document.getElementById('quiz').style.display = 'block';
+        showQuestion();
+    }
+
+    function showQuestion() {
+        const q = questions[currentQuestion];
+        document.getElementById('q-text').innerText = `[LOG #${currentQuestion + 1}] QUESTION: ${q.q}`;
+        const optionsDiv = document.getElementById('q-options');
+        optionsDiv.innerHTML = '';
+        
+        q.a.forEach((opt, index) => {
+            const btn = document.createElement('button');
+            btn.innerText = opt;
+            btn.onclick = () => checkAnswer(index);
+            optionsDiv.appendChild(btn);
+        });
+
+        // Update UI
+        document.getElementById('progress-fill').style.width = `${(currentQuestion / questions.length) * 100}%`;
+    }
+
+    function checkAnswer(choice) {
+        if (choice === questions[currentQuestion].correct) {
+            currentQuestion++;
+            updateStatus("PHÒNG THỦ THÀNH CÔNG", "LOW", false);
+        } else {
+            shield -= 20;
+            updateStatus("CẢNH BÁO: HỆ THỐNG BỊ XÂM NHẬP", "CRITICAL", true);
+            alert(`Sai rồi! Gợi ý: Hãy xem lại nguồn tài liệu.cite}]`);
+        }
+
+        if (shield <= 0) {
+            endGame(false);
+        } else if (currentQuestion >= questions.length) {
+            endGame(true);
+        } else {
+            showQuestion();
+        }
+    }
+
+    function updateStatus(msg, level, danger) {
+        document.getElementById('defense-status').innerText = msg;
+        document.getElementById('alert-system').innerText = `THREAT LEVEL: ${level}`;
+        document.getElementById('shield-percent').innerText = `${shield}%`;
+        document.getElementById('danger-overlay').style.display = danger ? 'block' : 'none';
+        if(danger) setTimeout(() => { document.getElementById('danger-overlay').style.display = 'none'; }, 500);
+    }
+
+    function endGame(win) {
+        document.getElementById('quiz').style.display = 'none';
+        document.getElementById('result').style.display = 'block';
+        document.getElementById('progress-fill').style.width = `100%`;
+        
+        if (win) {
+            document.getElementById('result-title').innerText = "HỆ THỐNG AN TOÀN!";
+            document.getElementById('result-desc').innerText = "Chúc mừng! Bạn đã trả lời đúng tất cả câu hỏi và đẩy lùi cuộc tấn công của tin tặc.";
+            document.getElementById('result-title').style.color = "var(--neon-green)";
+        } else {
+            document.getElementById('result-title').innerText = "HỆ THỐNG BỊ PHÁ HỦY!";
+            document.getElementById('result-desc').innerText = "Lớp bảo vệ đã sụp đổ. Dữ liệu của bạn đã bị mã hóa bởi Ransomware. Hãy học lại các kiến thức an ninh mạng!";
+            document.getElementById('result-title').style.color = "var(--hacker-red)";
+        }
+    }
+
+    // Hiệu ứng Matrix nền
+    const canvas = document.getElementById('matrix-bg');
+    const ctx = canvas.getContext('2d');
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+    const chars = "0101010101ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+    const fontSize = 15;
+    const columns = canvas.width / fontSize;
+    const drops = Array(Math.floor(columns)).fill(1);
+
+    function drawMatrix() {
+        ctx.fillStyle = "rgba(0, 0, 0, 0.05)";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = "#0F0";
+        ctx.font = fontSize + "px arial";
+        for (let i = 0; i < drops.length; i++) {
+            const text = chars[Math.floor(Math.random() * chars.length)];
+            ctx.fillText(text, i * fontSize, drops[i] * fontSize);
+            if (drops[i] * fontSize > canvas.height && Math.random() > 0.975) drops[i] = 0;
+            drops[i]++;
+        }
+    }
+    setInterval(drawMatrix, 50);
+</script>
+
+</body>
+</html>
